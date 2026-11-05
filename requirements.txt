@@ -1,0 +1,15 @@
+UV
+#UV init
+#uv sync
+langchain
+#uv add langchain
+langgraph
+#uv add langgraph
+langchain-groq
+#uv add langchain-groq
+pydantic
+#uv add pydantic
+pyodbc
+#uv add pyodbc
+pandas
+#uv add pandas

@@ -1,0 +1,6 @@
+first_name,last_name,email,phone,city,province,user_type,signup_date,is_active
+Nandini,Sharma,nandini.sharma@example.com,9876543210,Hyderabad,Telangana,rider,2026-01-15,1
+Rahul,Kumar,rahul.kumar@example.com,9876543211,Hyderabad,Telangana,driver,2026-01-20,1
+Priya,Reddy,priya.reddy@example.com,9876543212,Secunderabad,Telangana,rider,2026-02-02,1
+Arjun,Rao,arjun.rao@example.com,9876543213,Hyderabad,Telangana,driver,2026-02-12,1
+Meera,Patel,meera.patel@example.com,9876543214,Hyderabad,Telangana,rider,2026-03-01,1
