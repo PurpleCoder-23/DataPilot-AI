@@ -60,6 +60,13 @@ def is_general_message(message: str) -> bool:
         "good morning", "good afternoon", "good evening",
         "how are you", "who are you", "what can you do",
         "thanks", "thank you", "thanks a lot",
+
+        # Combined greetings and capability questions
+        "hello, what can you do",
+        "hi, what can you do",
+        "hey, what can you do",
+        "hello, who are you",
+        "hi, who are you",
     }
 
     return normalized in general_messages
@@ -82,7 +89,16 @@ def general_node(state: DataAgentSchema):
             "Hello! I'm your Data Agent. You can ask me about your uploaded "
             "dataset, SQL Server, or ETL workflows."
         )
-    elif message in {"how are you", "who are you", "what can you do"}:
+    elif message in {
+        "how are you",
+        "who are you",
+        "what can you do",
+        "hello, what can you do",
+        "hi, what can you do",
+        "hey, what can you do",
+        "hello, who are you",
+        "hi, who are you",
+    }:
         response = (
             "I'm your Main Data Agent. I can route questions to the Data "
             "Analyst for uploaded files, SQL Analyst for database questions, "
