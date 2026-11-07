@@ -1,14 +1,16 @@
 import os
 import sys
-import re
 
+# Add project root to Python path
 sys.path.append(
-    os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..")
+    )
 )
 
 from utils.llm_pick import pick_llm
 from utils.etl_tools import ETLTools
-from Models.SchemA import ETLAgentSchema
+from Models.schema import ETLAgentSchema
 
 from langchain_core.messages import (
     AIMessage,
@@ -16,6 +18,7 @@ from langchain_core.messages import (
     SystemMessage,
     ToolMessage,
 )
+
 from langgraph.graph import StateGraph, START, END
 from langchain.tools import tool
 
@@ -27,26 +30,37 @@ from langchain.tools import tool
 @tool
 def extract_load_tool(
     url: str,
-    output_folder: str,
-    format: str
+    output_folder: str = "data/extract",
+    format: str = "csv",
 ) -> str:
     """
-    Extract data from an API endpoint and save it to a folder.
+    Extract data from a public JSON API and save it.
 
     Args:
-        url: The API endpoint from which to extract data.
-        output_folder: Folder where the extracted data will be saved.
+        url: Public HTTP/HTTPS API endpoint.
+        output_folder: Project-relative destination folder.
         format: Output format: csv, json, or parquet.
+    """
+    return ETLTools().extract_load(url, output_folder, format)
+
+
+
+
+@tool
+def inspect_dataset_tool(input_file_path: str) -> str:
+    """
+    Inspect a dataset before transforming it.
+
+    Args:
+        input_file_path: Project-relative path to CSV, Excel, JSON, or Parquet file.
 
     Returns:
-        A message indicating the extraction result.
+        Dataset row/column counts, exact column names, and a small preview.
     """
-    etl_tools = ETLTools()
-
-    return etl_tools.extract_load(
-        url,
-        output_folder,
-        format
+    return ETLTools().transform_load_context(
+        file_path=input_file_path,
+        output_folder="data/transform",
+        output_format="csv",
     )
 
 
@@ -55,108 +69,45 @@ def transform_load_tool(
     input_file_path: str,
     output_folder: str = "data/transform",
     output_format: str = "csv",
-    user_question: str = (
-        "Select useful columns and save the transformed dataset"
-    ),
+    select_columns: list[str] | None = None,
+    drop_columns: list[str] | None = None,
+    filter_column: str | None = None,
+    filter_operator: str | None = None,
+    filter_value: str | int | float | bool | None = None,
+    sort_by: list[str] | None = None,
+    ascending: bool = True,
+    drop_duplicates: bool = False,
+    limit: int | None = None,
 ) -> str:
     """
-    Transform a dataset using pandas and save the result.
+    Transform a dataset using a controlled set of Pandas operations.
 
-    Args:
-        input_file_path: Path to the input data file.
-        output_folder: Destination folder. Defaults to data/transform.
-        output_format: Output format: csv, json, or parquet.
-            Defaults to csv.
-        user_question: Specific instructions describing the requested
-            data transformation.
+    Supported operations:
+    - Select columns
+    - Drop columns
+    - Filter rows using supported operators
+    - Sort rows
+    - Remove duplicate rows
+    - Limit number of rows
+    - Save as CSV, JSON, or Parquet
 
-    Returns:
-        The transformation result and execution details.
+    This tool does not execute generated Python code.
     """
     etl_tools = ETLTools()
 
-    # Get a preview/context of the input dataset.
-    top_3_rows = etl_tools.transform_load_context(
-        input_file_path,
-        output_folder,
-        output_format,
-    )
-
-    # Select the LLM used to generate pandas code.
-    llm = pick_llm("high")
-
-    prompt = f"""
-You are a Python data analyst who uses pandas.
-
-Generate executable Python pandas code to perform the requested
-data transformation.
-
-Rules:
-1. Read the input dataset from the exact path provided.
-2. Use pandas to inspect and transform the dataset.
-3. Follow the user's requested transformation.
-4. Save the transformed dataset inside the specified output folder.
-5. Use the requested output format: {output_format}.
-6. Create the output folder if it does not exist.
-7. Use only columns that actually exist in the dataset.
-8. Do not invent columns or data.
-9. Output only executable Python code.
-10. Do not include explanations or Markdown code fences.
-
-Input file:
-{input_file_path}
-
-Output folder:
-{output_folder}
-
-Output format:
-{output_format}
-
-User's transformation request:
-{user_question}
-
-Dataset context:
-{top_3_rows}
-"""
-
-    response = llm.invoke(prompt).content
-
-    # Extract code from the model response.
-    if not isinstance(response, str):
-        raise TypeError(
-            "The code-generation LLM did not return text."
-        )
-
-    pandas_code = response.strip()
-
-    # Remove Markdown fences if the model includes them.
-    pandas_code = re.sub(
-        r"^\s*```(?:python)?\s*",
-        "",
-        pandas_code,
-        flags=re.IGNORECASE,
-    )
-    pandas_code = re.sub(
-        r"\s*```\s*$",
-        "",
-        pandas_code,
-    ).strip()
-
-    if not pandas_code:
-        raise ValueError(
-            "The LLM returned empty pandas code."
-        )
-
-    # Execute the generated pandas code.
-    results = etl_tools.execute_code(pandas_code)
-
-    return (
-        f"Transformation execution completed.\n"
-        f"Input file: {input_file_path}\n"
-        f"Output folder: {output_folder}\n"
-        f"Output format: {output_format}\n\n"
-        f"Pandas code executed:\n{pandas_code}\n\n"
-        f"Execution results:\n{results}"
+    return etl_tools.transform_dataset(
+        input_file_path=input_file_path,
+        output_folder=output_folder,
+        output_format=output_format,
+        select_columns=select_columns,
+        drop_columns=drop_columns,
+        filter_column=filter_column,
+        filter_operator=filter_operator,
+        filter_value=filter_value,
+        sort_by=sort_by,
+        ascending=ascending,
+        drop_duplicates=drop_duplicates,
+        limit=limit,
     )
 
 
@@ -166,6 +117,7 @@ Dataset context:
 
 tools = [
     extract_load_tool,
+    inspect_dataset_tool,
     transform_load_tool,
 ]
 
@@ -178,13 +130,11 @@ llm_bind = llm.bind_tools(tools)
 # ---------------------------------------------------------
 
 def llm_node(state: ETLAgentSchema):
-    """
-    Generate a response and request ETL tools when necessary.
-    """
+    """Generate a response and request ETL tools when needed."""
 
     messages = state.messages or []
 
-    # Prevent repeated tool-calling cycles.
+    # Prevent repeated tool-calling cycles
     tool_call_count = sum(
         1
         for message in messages
@@ -198,14 +148,14 @@ def llm_node(state: ETLAgentSchema):
                 AIMessage(
                     content=(
                         "Stopped after four tool-calling rounds. "
-                        "Check the previous tool results and try "
+                        "Please check the previous results and try "
                         "a more specific request."
                     )
                 )
             ]
         }
 
-    # Limit long message content while preserving message metadata.
+    # Limit long message content while preserving message metadata
     bounded_messages = []
 
     for message in messages:
@@ -214,9 +164,7 @@ def llm_node(state: ETLAgentSchema):
         if isinstance(content, str) and len(content) > 2000:
             message = message.model_copy(
                 update={
-                    "content": (
-                        content[:2000] + "\n[Content truncated]"
-                    )
+                    "content": content[:2000] + "\n[Content truncated]"
                 }
             )
 
@@ -224,38 +172,73 @@ def llm_node(state: ETLAgentSchema):
 
     system_message = SystemMessage(
         content=(
-            "You are a Python Data Analyst with tools for extracting "
+            "You are a Data Analyst assistant with tools for extracting "
             "and transforming datasets.\n\n"
 
-            "Choose the appropriate tool for the user's request.\n\n"
+            "IMPORTANT SAFETY RULE:\n"
+            "Never generate, request, or execute Python code. "
+            "The transformation tool supports only structured operations.\n\n"
 
-            "When calling extract_load_tool, provide url, "
-            "output_folder, and format.\n\n"
+            "For API extraction, call extract_load_tool with the API URL, "
+            "destination folder, and format. Only use public HTTP/HTTPS "
+            "JSON API endpoints.\n\n"
 
-            "When calling transform_load_tool, provide "
-            "input_file_path, output_folder, output_format, "
-            "and user_question whenever possible.\n"
-            "For output_folder, use 'data/transform' if the user "
-            "does not specify a destination.\n"
-            "For output_format, use 'csv' if the user does not "
-            "specify a format.\n"
-            "Preserve the user's requested transformation in "
-            "user_question.\n\n"
+            "For file-based dataset transformations, first call "
+            "inspect_dataset_tool when exact column names are not already "
+            "known. Then call transform_load_tool with exact columns and "
+            "structured operation arguments.\n\n"
 
-            "Do not claim that an operation succeeded unless "
-            "the tool result supports that claim.\n"
-            "After receiving a successful tool result, summarize "
-            "the outcome instead of repeating the same tool call."
+            "IMPORTANT: Do not invent file paths. If the user refers to "
+            "an uploaded file but no accessible project-relative path is "
+            "provided in the conversation, ask for the file path or wait "
+            "for the application to pass the uploaded file into the ETL "
+            "workflow. Do not ask for a file path if one is already present.\n\n"
+
+            "This ETL tool currently reads project files using a "
+            "project-relative path. It does not directly access Streamlit's "
+            "temporary upload object or the Data Analyst's in-memory "
+            "DataFrame. The app must pass an accessible path or handle "
+            "uploaded-DataFrame transformations directly.\n\n"
+
+            "Supported transformation operations:\n"
+            "- select_columns: list of column names to keep\n"
+            "- drop_columns: list of column names to remove\n"
+            "- filter_column + filter_operator + filter_value\n"
+            "- sort_by: list of column names\n"
+            "- ascending: true or false\n"
+            "- drop_duplicates: true or false\n"
+            "- limit: positive integer\n\n"
+
+            "Supported filter_operator values:\n"
+            "equals, not_equals, greater_than, greater_than_or_equal, "
+            "less_than, less_than_or_equal, contains, is_null, not_null.\n\n"
+
+            "Use only column names that are present in the dataset preview "
+            "or explicitly provided by the user. If a requested operation "
+            "cannot be represented by these options, explain the limitation "
+            "and ask the user to choose a supported operation.\n\n"
+
+            "Defaults:\n"
+            "- output_folder: data/transform\n"
+            "- output_format: csv\n\n"
+
+            "Do not claim an operation succeeded unless the tool result "
+            "confirms success. If a tool returns TRANSFORMATION_FAILED or "
+            "EXECUTION_BLOCKED, explain that it failed and do not claim "
+            "the file was saved.\n\n"
+
+            "After a successful tool result, summarize the output path, "
+            "row count, and columns when available. Do not repeat the "
+            "same tool call unnecessarily. If a tool result says failed, "
+            "report the failure and its cause plainly."
         )
     )
 
-    final_answer = llm_bind.invoke(
+    response = llm_bind.invoke(
         [system_message] + bounded_messages
     )
 
-    return {
-        "messages": [final_answer]
-    }
+    return {"messages": [response]}
 
 
 # ---------------------------------------------------------
@@ -263,11 +246,10 @@ def llm_node(state: ETLAgentSchema):
 # ---------------------------------------------------------
 
 def tool_node(state: ETLAgentSchema):
-    """
-    Execute requested tools and return their results.
-    """
+    """Execute requested tools and return their results."""
 
     tools_results = []
+
     tools_by_name = {
         current_tool.name: current_tool
         for current_tool in tools
@@ -278,18 +260,13 @@ def tool_node(state: ETLAgentSchema):
     for tool_call in last_message.tool_calls:
         tool_name = tool_call["name"]
         tool_args = tool_call.get("args", {})
-
         current_tool = tools_by_name.get(tool_name)
 
         if current_tool is None:
             result = f"Unknown tool: {tool_name}"
-
         else:
             try:
-                # StructuredTool.invoke applies declared defaults
-                # to optional arguments omitted from the argument dict.
                 result = current_tool.invoke(tool_args)
-
             except Exception as error:
                 result = (
                     f"Tool execution failed: "
@@ -303,11 +280,7 @@ def tool_node(state: ETLAgentSchema):
             )
         )
 
-    # ETLAgentSchema.messages uses an append reducer.
-    # Return only new messages, not the entire existing state.
-    return {
-        "messages": tools_results
-    }
+    return {"messages": tools_results}
 
 
 # ---------------------------------------------------------
@@ -321,29 +294,20 @@ etl_analyst_graph.add_node("tool_node", tool_node)
 
 
 def is_tool_call(state: ETLAgentSchema):
-    """
-    Route to the tool node only if the latest AI message
-    contains tool calls.
-    """
+    """Route to the tool node only when the latest AI message has tool calls."""
 
     if not state.messages:
         return "end"
 
     last_message = state.messages[-1]
 
-    if (
-        isinstance(last_message, AIMessage)
-        and last_message.tool_calls
-    ):
+    if isinstance(last_message, AIMessage) and last_message.tool_calls:
         return "tool_node"
 
     return "end"
 
 
-etl_analyst_graph.add_edge(
-    START,
-    "llm_node",
-)
+etl_analyst_graph.add_edge(START, "llm_node")
 
 etl_analyst_graph.add_conditional_edges(
     "llm_node",
@@ -354,27 +318,20 @@ etl_analyst_graph.add_conditional_edges(
     },
 )
 
-etl_analyst_graph.add_edge(
-    "tool_node",
-    "llm_node",
-)
-
+etl_analyst_graph.add_edge("tool_node", "llm_node")
 
 etl_analyst = etl_analyst_graph.compile()
+
+
 # ---------------------------------------------------------
 # MAIN: TEST TRANSFORMATION
 # ---------------------------------------------------------
 
 if __name__ == "__main__":
 
-    # Compile the graph.
-    etl_analyst = etl_analyst_graph.compile()
-
-    # Print the generated tool schema for debugging.
     print("Transform tool schema:")
     print(transform_load_tool.args)
 
-    # Save the graph diagram.
     try:
         from IPython.display import Image
 
@@ -390,7 +347,6 @@ if __name__ == "__main__":
     except Exception as error:
         print(f"Could not save graph diagram: {error}")
 
-    # Test the transformation workflow.
     response = etl_analyst.invoke(
         {
             "messages": [
@@ -398,20 +354,18 @@ if __name__ == "__main__":
                     content=(
                         "Transform the extracted Pokémon dataset at "
                         "'data/extract/extracted_data.csv'. "
-                        "Inspect the columns and select useful fields "
-                        "such as name, height, weight, and "
-                        "base_experience if available. "
+                        "Keep useful fields such as name, height, weight, "
+                        "and base_experience if they exist. "
                         "Save the transformed dataset as CSV in "
                         "'data/transform'."
                     )
                 )
             ]
         },
-        config={
-            "recursion_limit": 20
-        },
+        config={"recursion_limit": 20},
     )
 
     print("\nETL Agent Response:")
+
     for message in response["messages"]:
         print(message)

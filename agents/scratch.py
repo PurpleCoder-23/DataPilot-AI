@@ -6,12 +6,15 @@ from langchain.messages import HumanMessage
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from utils.llm_pick import pick_llm
-from Models.SchemA import AgentSchema , JudgementSchema
+from Models.schema import (
+    SQLAgentSchema,
+    SQLSafetyJudgementSchema,
+)
 from utils.database import DatabaseUtil
 
 
 llm=pick_llm('medium')  # Pick the appropriate LLM based on the complexity of the task
-llm_judge=llm.with_structured_output(JudgementSchema)  # Create a structured output version of the LLM for judgement tasks
+llm_judge=llm.with_structured_output( SQLSafetyJudgementSchema)  # Create a structured output version of the LLM for judgement tasks
 
 
 sql_query="SELECT * FROM users;"

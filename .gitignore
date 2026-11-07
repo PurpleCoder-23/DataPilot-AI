@@ -10,18 +10,35 @@ wheels/
 # Virtual environments
 .venv/
 venv/
+env/
 
 # Environment variables and secrets
 .env
 .env.*
 !.env.example
 
+# Streamlit secrets
+.streamlit/secrets.toml
+
 # IDE
 .vscode/
+.idea/
 
 # Logs
 *.log
 
+# Local databases
+*.sqlite
+*.sqlite3
+*.db
+
 # OS files
 .DS_Store
 Thumbs.db
+
+# Docker overrides
+docker-compose.override.yml
+
+# Temporary files
+*.tmp
+*.bak
